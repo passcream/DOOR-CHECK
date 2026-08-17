@@ -3,41 +3,50 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Door Status Tracker</title>
+  <title>Door Lock Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Firebase Compatibility SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
-<body class="bg-slate-950 text-white min-h-screen flex items-center justify-center p-4">
+<body class="bg-slate-950 text-white min-h-screen p-4 flex justify-center">
 
-  <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-    <h1 class="text-xl font-bold text-center text-emerald-400 mb-2">🚪 Door Status Tracker</h1>
-    <p class="text-xs text-slate-400 text-center uppercase tracking-wider mb-6">Tap a door button to lock / unlock:</p>
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-xl shadow-2xl my-auto">
+    <h1 class="text-2xl font-bold text-center text-emerald-400 mb-1">🚪 Terminal Door Tracker</h1>
+    <p class="text-xs text-slate-400 text-center uppercase tracking-wider mb-6">Tap sub-door to log lock/unlock state</p>
     
-    <!-- Buttons -->
-    <div class="grid grid-cols-2 gap-3 mb-6">
-      <button id="btn-Terminal 2" onclick="toggleDoor('Terminal 2')" class="p-4 rounded-xl bg-slate-800 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer">
+    <!-- Terminal Switcher Tabs -->
+    <div class="flex bg-slate-950 p-1.5 rounded-xl border border-slate-800 mb-6">
+      <button id="tab-T2" onclick="switchTerminal('T2')" class="flex-1 py-2 rounded-lg font-bold text-sm transition bg-emerald-600 text-white shadow">
         Terminal 2
       </button>
-      <button id="btn-Terminal 3" onclick="toggleDoor('Terminal 3')" class="p-4 rounded-xl bg-slate-800 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer">
+      <button id="tab-T3" onclick="switchTerminal('T3')" class="flex-1 py-2 rounded-lg font-bold text-sm transition text-slate-400 hover:text-white">
         Terminal 3
       </button>
     </div>
 
-    <!-- Status Output -->
-    <div class="border-t border-slate-800 pt-4">
-      <div class="text-sm font-semibold text-slate-300 mb-3">📋 Real-Time Status Log</div>
-      <div id="status-log" class="space-y-2 text-sm text-slate-400">Loading live data...</div>
+    <!-- Door Grid -->
+    <div id="door-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2.5 mb-6">
+      <!-- Generated via JS -->
     </div>
 
-    <!-- Live Error Box -->
+    <!-- Real-Time Activity Log -->
+    <div class="border-t border-slate-800 pt-4">
+      <div class="flex justify-between items-center mb-3">
+        <span class="text-sm font-semibold text-slate-300">📜 Today's Activity History</span>
+        <span id="active-term-label" class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Terminal 2</span>
+      </div>
+      <div id="history-log" class="space-y-1.5 max-h-56 overflow-y-auto text-xs pr-1">
+        <div class="text-slate-500 italic">Loading activity history...</div>
+      </div>
+    </div>
+
+    <!-- Error Box -->
     <div id="error-box" class="mt-4 p-3 bg-red-950/80 border border-red-800 text-red-300 text-xs rounded-lg hidden"></div>
   </div>
 
   <script>
-    // Your exact Firebase project keys
     const firebaseConfig = {
       apiKey: "AIzaSyBQ5_TI3e84CM0IKsOZIcqZM-MAv92jN6U",
       authDomain: "door-check-78157.firebaseapp.com",
@@ -49,62 +58,138 @@
       measurementId: "G-C08XS1REV8"
     };
 
-    // Initialize Firebase
     try {
       firebase.initializeApp(firebaseConfig);
     } catch (e) {
-      showError("Firebase setup failed: " + e.message);
+      showError("Firebase Init Error: " + e.message);
     }
 
     const db = firebase.database();
 
-    // Toggle Door Status
-    function toggleDoor(doorName) {
-      const doorRef = db.ref('doors/' + doorName);
-      doorRef.once('value').then(snapshot => {
+    // Door Configuration
+    const doorsData = {
+      T2: ["1A", "1B", "2", "3", "4A", "4B", "4C", "4D", "5", "6A", "6B", "7", "8"],
+      T3: ["1", "2", "3", "4", "5"]
+    };
+
+    let activeTerminal = "T2";
+
+    function switchTerminal(term) {
+      activeTerminal = term;
+      
+      // Update Tab Styles
+      document.getElementById('tab-T2').className = term === 'T2' 
+        ? "flex-1 py-2 rounded-lg font-bold text-sm transition bg-emerald-600 text-white shadow"
+        : "flex-1 py-2 rounded-lg font-bold text-sm transition text-slate-400 hover:text-white";
+      
+      document.getElementById('tab-T3').className = term === 'T3' 
+        ? "flex-1 py-2 rounded-lg font-bold text-sm transition bg-emerald-600 text-white shadow"
+        : "flex-1 py-2 rounded-lg font-bold text-sm transition text-slate-400 hover:text-white";
+
+      document.getElementById('active-term-label').innerText = term === 'T2' ? "Terminal 2" : "Terminal 3";
+
+      renderGrid();
+      attachListeners();
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById('door-grid');
+      grid.innerHTML = "";
+
+      doorsData[activeTerminal].forEach(subDoor => {
+        const btn = document.createElement('button');
+        btn.id = `btn-${activeTerminal}-${subDoor}`;
+        btn.onclick = () => toggleDoor(subDoor);
+        btn.className = "p-3 rounded-xl bg-slate-800 border border-slate-700/50 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer flex flex-col items-center justify-center min-h-[64px]";
+        btn.innerHTML = `<span class="text-xs text-slate-400">Door</span><span class="text-base">${subDoor}</span>`;
+        grid.appendChild(btn);
+      });
+    }
+
+    function toggleDoor(subDoor) {
+      const currentDoorRef = db.ref(`status/${activeTerminal}/${subDoor}`);
+      const historyRef = db.ref(`history/${activeTerminal}`);
+
+      currentDoorRef.once('value').then(snapshot => {
         const currentStatus = snapshot.val()?.status;
         const nextStatus = (currentStatus === "LOCKED") ? "UNLOCKED" : "LOCKED";
-        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const dateStr = new Date().toLocaleDateString();
 
-        return doorRef.set({ status: nextStatus, updatedAt: now });
-      }).catch(err => showError("Click write error: " + err.message));
+        // 1. Update Latest State
+        currentDoorRef.set({ status: nextStatus, updatedAt: timeStr });
+
+        // 2. Append to Pass-Through Audit Log
+        historyRef.push({
+          door: subDoor,
+          status: nextStatus,
+          timestamp: timeStr,
+          date: dateStr
+        });
+      }).catch(err => showError("Write Error: " + err.message));
     }
 
-    // Read Data in Real-Time
-    db.ref('doors').on('value', snapshot => {
-      const data = snapshot.val() || {};
-      const logEl = document.getElementById('status-log');
-      logEl.innerHTML = "";
+    function attachListeners() {
+      // Realtime Status Listener (Updates Button Colors)
+      db.ref(`status/${activeTerminal}`).on('value', snapshot => {
+        const data = snapshot.val() || {};
+        doorsData[activeTerminal].forEach(subDoor => {
+          const btn = document.getElementById(`btn-${activeTerminal}-${subDoor}`);
+          const doorInfo = data[subDoor] || { status: "UNLOCKED" };
 
-      ["Terminal 2", "Terminal 3"].forEach(door => {
-        const info = data[door] || { status: "UNLOCKED", updatedAt: "Not checked yet" };
-        const btn = document.getElementById(`btn-${door}`);
-
-        if (btn) {
-          if (info.status === "LOCKED") {
-            btn.innerText = door + "\n(LOCKED)";
-            btn.className = "p-4 rounded-xl bg-emerald-600 text-white font-bold transition hover:opacity-90 active:scale-95 cursor-pointer shadow-lg shadow-emerald-900/30";
-          } else {
-            btn.innerText = door + "\n(UNLOCKED)";
-            btn.className = "p-4 rounded-xl bg-slate-800 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer";
+          if (btn) {
+            if (doorInfo.status === "LOCKED") {
+              btn.className = "p-3 rounded-xl bg-emerald-600 border border-emerald-500 text-white font-bold transition hover:opacity-90 active:scale-95 cursor-pointer flex flex-col items-center justify-center min-h-[64px] shadow-lg shadow-emerald-950/50";
+              btn.innerHTML = `<span class="text-xs text-emerald-200">Door ${subDoor}</span><span class="text-xs bg-emerald-800/80 px-1.5 py-0.5 rounded mt-0.5">LOCKED</span>`;
+            } else {
+              btn.className = "p-3 rounded-xl bg-slate-800 border border-slate-700/50 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer flex flex-col items-center justify-center min-h-[64px]";
+              btn.innerHTML = `<span class="text-xs text-slate-400">Door</span><span class="text-base">${subDoor}</span>`;
+            }
           }
+        });
+      }, err => showError("Read Error: " + err.message));
+
+      // Realtime History Listener (Shows All Logs for the Day)
+      db.ref(`history/${activeTerminal}`).limitToLast(20).on('value', snapshot => {
+        const historyLog = document.getElementById('history-log');
+        historyLog.innerHTML = "";
+        
+        const logs = [];
+        snapshot.forEach(child => {
+          logs.unshift(child.val()); // Newest entries on top
+        });
+
+        if (logs.length === 0) {
+          historyLog.innerHTML = `<div class="text-slate-500 italic">No door passes logged today.</div>`;
+          return;
         }
 
-        logEl.innerHTML += `
-          <div class="flex justify-between items-center py-2 px-3 bg-slate-800/40 rounded-lg border border-slate-800">
-            <span class="font-medium text-slate-200">${door}: <b class="${info.status === 'LOCKED' ? 'text-emerald-400' : 'text-rose-400'}">${info.status}</b></span>
-            <span class="text-xs text-slate-500">${info.updatedAt}</span>
-          </div>`;
+        logs.forEach(item => {
+          const isLocked = item.status === "LOCKED";
+          historyLog.innerHTML += `
+            <div class="flex justify-between items-center py-1.5 px-3 bg-slate-800/40 rounded-lg border border-slate-800/80">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-200">Door ${item.door}</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${isLocked ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}">
+                  ${item.status}
+                </span>
+              </div>
+              <span class="text-slate-500">${item.timestamp}</span>
+            </div>
+          `;
+        });
       });
-    }, error => {
-      showError("Permission denied: Check your Firebase Realtime Database Rules tab!");
-    });
+    }
 
     function showError(msg) {
-      const errorBox = document.getElementById('error-box');
-      errorBox.innerText = msg;
-      errorBox.classList.remove('hidden');
+      const box = document.getElementById('error-box');
+      box.innerText = msg;
+      box.classList.remove('hidden');
     }
+
+    // Initialize View
+    renderGrid();
+    attachListeners();
   </script>
 </body>
 </html>
