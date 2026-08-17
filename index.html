@@ -24,10 +24,12 @@
     <h1 class="text-2xl font-bold text-center text-emerald-400 mb-1">🚪 Door Lock Tracker</h1>
     <p class="text-xs text-slate-400 text-center uppercase tracking-wider mb-5">Tap sub-door to log lock timestamp</p>
     
-    <!-- User Name Input -->
+    <!-- User Name Input (Required) -->
     <div class="mb-5">
-      <label for="user-name" class="block text-xs font-medium text-slate-400 mb-1">Your Name (Optional)</label>
-      <input type="text" id="user-name" placeholder="Enter your name..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition" />
+      <label for="user-name" class="block text-xs font-medium text-slate-300 mb-1">
+        Your Name <span class="text-rose-500 font-bold">* (Required)</span>
+      </label>
+      <input type="text" id="user-name" placeholder="Enter your name to proceed..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition" />
     </div>
 
     <!-- Terminal Switcher Tabs -->
@@ -55,13 +57,11 @@
         
         <!-- Date Selector & Export Button -->
         <div class="flex items-center gap-2 flex-wrap">
-          <!-- Calendar Date Picker Wrapper -->
           <div class="relative flex items-center bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 focus-within:border-emerald-500">
             <span class="mr-1.5 text-xs text-slate-400">📅</span>
             <input type="date" id="history-date" onchange="fetchHistoryForSelectedDate()" onclick="this.showPicker && this.showPicker()" class="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer" />
           </div>
 
-          <!-- CSV Export Button -->
           <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer shadow-md">
             📥 CSV
           </button>
@@ -73,7 +73,7 @@
       </div>
     </div>
 
-    <!-- Error Box -->
+    <!-- Error / Warning Box -->
     <div id="error-box" class="mt-4 p-3 bg-red-950/80 border border-red-800 text-red-300 text-xs rounded-lg hidden"></div>
   </div>
 
@@ -141,10 +141,22 @@
     }
 
     function recordLock(subDoor) {
-      const historyRef = db.ref(`history/${activeTerminal}`);
-      const userNameInput = document.getElementById('user-name').value.trim();
-      const personName = userNameInput !== "" ? userNameInput : "Anonymous";
+      const nameInput = document.getElementById('user-name');
+      const personName = nameInput.value.trim();
 
+      // Require Name Validation
+      if (!personName) {
+        showError("⚠️ Please enter your name before logging a door lock!");
+        nameInput.classList.add('border-rose-500', 'bg-rose-950/30');
+        nameInput.focus();
+        return;
+      }
+
+      // Reset Input Highlight & Error Box if Valid
+      hideError();
+      nameInput.classList.remove('border-rose-500', 'bg-rose-950/30');
+
+      const historyRef = db.ref(`history/${activeTerminal}`);
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const isoDate = now.toISOString().split('T')[0];
@@ -186,7 +198,7 @@
                   <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
                     LOCKED
                   </span>
-                  <span class="text-slate-400 text-[11px]">by <b>${item.user || 'Anonymous'}</b></span>
+                  <span class="text-slate-400 text-[11px]">by <b>${item.user}</b></span>
                 </div>
                 <span class="text-slate-500">${item.timestamp}</span>
               </div>
@@ -207,7 +219,7 @@
       let csvContent = "data:text/csv;charset=utf-8,Terminal,Door,Status,Logged By,Date,Time\n";
 
       currentFetchedLogs.forEach(row => {
-        const line = `"${termName}","Door ${row.door}","${row.status}","${row.user || 'Anonymous'}","${row.date}","${row.timestamp}"`;
+        const line = `"${termName}","Door ${row.door}","${row.status}","${row.user}","${row.date}","${row.timestamp}"`;
         csvContent += line + "\n";
       });
 
@@ -224,6 +236,11 @@
       const box = document.getElementById('error-box');
       box.innerText = msg;
       box.classList.remove('hidden');
+    }
+
+    function hideError() {
+      const box = document.getElementById('error-box');
+      box.classList.add('hidden');
     }
 
     // Initialize View
