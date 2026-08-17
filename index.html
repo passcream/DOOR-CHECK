@@ -1,174 +1,43 @@
-HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Airport Door Status Tracker</title>
-    <!-- Tailwind CSS for modern styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-start p-4">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Door Status Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <div class="max-w-lg w-full bg-slate-800 rounded-2xl shadow-2xl p-6 mt-4 border border-slate-700">
-        <h1 class="text-2xl font-bold text-center mb-6 text-emerald-400">🚪 Door Status Tracker</h1>
-
-        <!-- Terminal Selection Tabs -->
-        <div class="flex bg-slate-900 p-1.5 rounded-xl mb-6 border border-slate-700">
-            <button id="term2Btn" onclick="switchTerminal('Terminal 2')" class="flex-1 py-3 rounded-lg font-bold text-lg transition text-white bg-emerald-600 shadow-md">Terminal 2</button>
-            <button id="term3Btn" onclick="switchTerminal('Terminal 3')" class="flex-1 py-3 rounded-lg font-bold text-lg transition text-slate-400 hover:text-white">Terminal 3</button>
-        </div>
-
-        <p class="text-xs text-slate-400 mb-3 text-center uppercase tracking-wider font-semibold">Tap a door button when closed:</p>
-
-        <!-- Door Buttons Grid -->
-        <div id="doorButtonsGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
-            <!-- Dynamically populated via JavaScript -->
-        </div>
-
-        <!-- Live Status Section -->
-        <div class="border-t border-slate-700 pt-6">
-            <h2 class="text-lg font-semibold mb-4 text-slate-200">📋 Real-Time Status Log</h2>
-            <div id="statusLog" class="space-y-3 max-h-56 overflow-y-auto pr-1">
-                <p class="text-slate-500 text-sm italic text-center">Loading status...</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-        // TODO: Replace with your own Firebase project configuration
-        const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            databaseURL: "YOUR_DATABASE_URL",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-
-        let currentTerminal = 'Terminal 2';
-
-        const terminalDoors = {
-            'Terminal 2': ['1A', '1B', '2', '3', '4A', '4B', '4C', '4D', '5', '6A', '6B', '7', '8'],
-            'Terminal 3': ['1', '2', '3', '4', '5']
-        };
-
-        // Switch Terminal Tabs
-        window.switchTerminal = function(terminal) {
-            currentTerminal = terminal;
-            const term2Btn = document.getElementById('term2Btn');
-            const term3Btn = document.getElementById('term3Btn');
-
-            if (terminal === 'Terminal 2') {
-                term2Btn.className = "flex-1 py-3 rounded-lg font-bold text-lg transition text-white bg-emerald-600 shadow-md";
-                term3Btn.className = "flex-1 py-3 rounded-lg font-bold text-lg transition text-slate-400 hover:text-white";
-            } else {
-                term3Btn.className = "flex-1 py-3 rounded-lg font-bold text-lg transition text-white bg-emerald-600 shadow-md";
-                term2Btn.className = "flex-1 py-3 rounded-lg font-bold text-lg transition text-slate-400 hover:text-white";
-            }
-
-            renderDoorButtons();
-        }
-
-        // Render big buttons for each door
-        function renderDoorButtons() {
-            const grid = document.getElementById('doorButtonsGrid');
-            grid.innerHTML = '';
-
-            const doors = terminalDoors[currentTerminal];
-
-            doors.forEach(door => {
-                const btn = document.createElement('button');
-                btn.className = "bg-slate-900 hover:bg-emerald-900/40 border border-slate-700 hover:border-emerald-500 active:scale-95 transition transform duration-150 p-4 rounded-xl flex flex-col items-center justify-center shadow-md group";
-                btn.innerHTML = `
-                    <span class="text-xs text-slate-400 group-hover:text-emerald-300 font-medium">${currentTerminal}</span>
-                    <span class="text-xl font-extrabold text-white mt-0.5">Door ${door}</span>
-                `;
-                btn.onclick = () => recordDoorClosed(door, btn);
-                grid.appendChild(btn);
-            });
-        }
-
-        // Record Door Closed Action on a single tap
-        window.recordDoorClosed = function(doorNum, btnElement) {
-            const fullLocation = `${currentTerminal} - Door ${doorNum}`;
-            const now = new Date();
-            const timestamp = now.toLocaleString();
-
-            const logsRef = ref(db, 'door_logs');
-            const newLogRef = push(logsRef);
-
-            set(newLogRef, {
-                location: fullLocation,
-                time: timestamp,
-                timestampRaw: now.getTime()
-            }).then(() => {
-                // Visual feedback on the clicked button
-                const originalHTML = btnElement.innerHTML;
-                btnElement.className = "bg-blue-600 border border-blue-400 p-4 rounded-xl flex flex-col items-center justify-center shadow-md text-white transition";
-                btnElement.innerHTML = `
-                    <span class="text-xs text-blue-200 font-medium">Recorded!</span>
-                    <span class="text-xl font-extrabold mt-0.5">✓ Door ${doorNum}</span>
-                `;
-                setTimeout(() => {
-                    btnElement.className = "bg-slate-900 hover:bg-emerald-900/40 border border-slate-700 hover:border-emerald-500 active:scale-95 transition transform duration-150 p-4 rounded-xl flex flex-col items-center justify-center shadow-md group";
-                    btnElement.innerHTML = originalHTML;
-                }, 1000);
-            }).catch((error) => {
-                alert("Failed to save: " + error.message);
-            });
-        };
-
-        // Initialize grid on page load
-        renderDoorButtons();
-
-        // Listen for Real-Time Updates
-        const logsRef = ref(db, 'door_logs');
-        onValue(logsRef, (snapshot) => {
-            const data = snapshot.val();
-            const logContainer = document.getElementById('statusLog');
-            logContainer.innerHTML = '';
-
-            if (!data) {
-                logContainer.innerHTML = '<p class="text-slate-500 text-sm italic text-center">No closures recorded yet.</p>';
-                return;
-            }
-
-            // Convert to array and sort by latest first
-            const logs = Object.entries(data).map(([key, value]) => ({ id: key, ...value }));
-            logs.sort((a, b) => b.timestampRaw - a.timestampRaw);
-
-            logs.forEach(log => {
-                const item = document.createElement('div');
-                item.className = 'bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 flex justify-between items-center';
-                item.innerHTML = `
-                    <div>
-                        <span class="font-bold text-emerald-400">${log.location}</span>
-                    </div>
-                    <div class="text-right text-xs text-slate-400">
-                        ${log.time}
-                    </div>
-                `;
-                logContainer.appendChild(item);
-            });
-        });
-    </script>
-</body>
-<!-- Firebase Compatibility SDKs (Easier for single-file HTML) -->
+  <!-- Firebase Compatibility SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex items-center justify-center p-4">
+
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+    <h1 class="text-xl font-bold text-center text-emerald-400 mb-2">🚪 Door Status Tracker</h1>
+    <p class="text-xs text-slate-400 text-center uppercase tracking-wider mb-6">Tap a door button to lock / unlock:</p>
+    
+    <!-- Buttons -->
+    <div class="grid grid-cols-2 gap-3 mb-6">
+      <button id="btn-Terminal 2" onclick="toggleDoor('Terminal 2')" class="p-4 rounded-xl bg-slate-800 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer">
+        Terminal 2
+      </button>
+      <button id="btn-Terminal 3" onclick="toggleDoor('Terminal 3')" class="p-4 rounded-xl bg-slate-800 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer">
+        Terminal 3
+      </button>
+    </div>
+
+    <!-- Status Output -->
+    <div class="border-t border-slate-800 pt-4">
+      <div class="text-sm font-semibold text-slate-300 mb-3">📋 Real-Time Status Log</div>
+      <div id="status-log" class="space-y-2 text-sm text-slate-400">Loading live data...</div>
+    </div>
+
+    <!-- Live Error Box -->
+    <div id="error-box" class="mt-4 p-3 bg-red-950/80 border border-red-800 text-red-300 text-xs rounded-lg hidden"></div>
+  </div>
 
   <script>
-    // Your exact Firebase configuration keys
+    // Your exact Firebase project keys
     const firebaseConfig = {
       apiKey: "AIzaSyBQ5_TI3e84CM0IKsOZIcqZM-MAv92jN6U",
       authDomain: "door-check-78157.firebaseapp.com",
@@ -181,49 +50,61 @@ HTML
     };
 
     // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
+    try {
+      firebase.initializeApp(firebaseConfig);
+    } catch (e) {
+      showError("Firebase setup failed: " + e.message);
+    }
+
     const db = firebase.database();
 
-    // Function triggered when door buttons are clicked
+    // Toggle Door Status
     function toggleDoor(doorName) {
       const doorRef = db.ref('doors/' + doorName);
       doorRef.once('value').then(snapshot => {
-        const current = snapshot.val()?.status;
-        const nextStatus = (current === "LOCKED") ? "UNLOCKED" : "LOCKED";
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const currentStatus = snapshot.val()?.status;
+        const nextStatus = (currentStatus === "LOCKED") ? "UNLOCKED" : "LOCKED";
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        return doorRef.set({ status: nextStatus, updatedAt: time });
-      }).catch(err => alert("Database Error: " + err.message));
+        return doorRef.set({ status: nextStatus, updatedAt: now });
+      }).catch(err => showError("Click write error: " + err.message));
     }
 
-    // Real-time Database Listener across all devices
+    // Read Data in Real-Time
     db.ref('doors').on('value', snapshot => {
       const data = snapshot.val() || {};
       const logEl = document.getElementById('status-log');
-      if (logEl) logEl.innerHTML = "";
+      logEl.innerHTML = "";
 
       ["Terminal 2", "Terminal 3"].forEach(door => {
-        const info = data[door] || { status: "UNLOCKED", updatedAt: "Never checked" };
+        const info = data[door] || { status: "UNLOCKED", updatedAt: "Not checked yet" };
         const btn = document.getElementById(`btn-${door}`);
 
         if (btn) {
           if (info.status === "LOCKED") {
-            btn.innerText = door + " (LOCKED)";
-            btn.style.backgroundColor = "#059669"; // Green
+            btn.innerText = door + "\n(LOCKED)";
+            btn.className = "p-4 rounded-xl bg-emerald-600 text-white font-bold transition hover:opacity-90 active:scale-95 cursor-pointer shadow-lg shadow-emerald-900/30";
           } else {
-            btn.innerText = door + " (UNLOCKED)";
-            btn.style.backgroundColor = "#334155"; // Dark Slate
+            btn.innerText = door + "\n(UNLOCKED)";
+            btn.className = "p-4 rounded-xl bg-slate-800 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer";
           }
         }
 
-        if (logEl) {
-          logEl.innerHTML += `<div style="display:flex; justify-between; margin-bottom: 6px;">
-            <span><b>${door}:</b> ${info.status}</span>
-            <span style="color:#94a3b8; font-size:12px;">${info.updatedAt}</span>
+        logEl.innerHTML += `
+          <div class="flex justify-between items-center py-2 px-3 bg-slate-800/40 rounded-lg border border-slate-800">
+            <span class="font-medium text-slate-200">${door}: <b class="${info.status === 'LOCKED' ? 'text-emerald-400' : 'text-rose-400'}">${info.status}</b></span>
+            <span class="text-xs text-slate-500">${info.updatedAt}</span>
           </div>`;
-        }
       });
+    }, error => {
+      showError("Permission denied: Check your Firebase Realtime Database Rules tab!");
     });
+
+    function showError(msg) {
+      const errorBox = document.getElementById('error-box');
+      errorBox.innerText = msg;
+      errorBox.classList.remove('hidden');
+    }
   </script>
 </body>
 </html>
