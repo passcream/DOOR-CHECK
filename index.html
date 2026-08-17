@@ -13,9 +13,15 @@
 <body class="bg-slate-950 text-white min-h-screen p-4 flex justify-center">
 
   <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-xl shadow-2xl my-auto">
-    <h1 class="text-2xl font-bold text-center text-emerald-400 mb-1">🚪 Terminal Door Tracker</h1>
-    <p class="text-xs text-slate-400 text-center uppercase tracking-wider mb-6">Tap sub-door to log lock/unlock state</p>
+    <h1 class="text-2xl font-bold text-center text-emerald-400 mb-1">🚪 Door Lock Tracker</h1>
+    <p class="text-xs text-slate-400 text-center uppercase tracking-wider mb-5">Tap sub-door to log lock timestamp</p>
     
+    <!-- User Name Input -->
+    <div class="mb-5">
+      <label for="user-name" class="block text-xs font-medium text-slate-400 mb-1">Your Name (Optional)</label>
+      <input type="text" id="user-name" placeholder="Enter your name..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition" />
+    </div>
+
     <!-- Terminal Switcher Tabs -->
     <div class="flex bg-slate-950 p-1.5 rounded-xl border border-slate-800 mb-6">
       <button id="tab-T2" onclick="switchTerminal('T2')" class="flex-1 py-2 rounded-lg font-bold text-sm transition bg-emerald-600 text-white shadow">
@@ -34,10 +40,10 @@
     <!-- Real-Time Activity Log -->
     <div class="border-t border-slate-800 pt-4">
       <div class="flex justify-between items-center mb-3">
-        <span class="text-sm font-semibold text-slate-300">📜 Today's Activity History</span>
+        <span class="text-sm font-semibold text-slate-300">📜 Lock Activity History</span>
         <span id="active-term-label" class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Terminal 2</span>
       </div>
-      <div id="history-log" class="space-y-1.5 max-h-56 overflow-y-auto text-xs pr-1">
+      <div id="history-log" class="space-y-1.5 max-h-64 overflow-y-auto text-xs pr-1">
         <div class="text-slate-500 italic">Loading activity history...</div>
       </div>
     </div>
@@ -99,86 +105,62 @@
       doorsData[activeTerminal].forEach(subDoor => {
         const btn = document.createElement('button');
         btn.id = `btn-${activeTerminal}-${subDoor}`;
-        btn.onclick = () => toggleDoor(subDoor);
-        btn.className = "p-3 rounded-xl bg-slate-800 border border-slate-700/50 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer flex flex-col items-center justify-center min-h-[64px]";
+        btn.onclick = () => recordLock(subDoor);
+        btn.className = "p-3 rounded-xl bg-slate-800 border border-slate-700/50 text-slate-300 font-bold transition hover:bg-emerald-600 hover:text-white active:scale-95 cursor-pointer flex flex-col items-center justify-center min-h-[64px]";
         btn.innerHTML = `<span class="text-xs text-slate-400">Door</span><span class="text-base">${subDoor}</span>`;
         grid.appendChild(btn);
       });
     }
 
-    function toggleDoor(subDoor) {
-      const currentDoorRef = db.ref(`status/${activeTerminal}/${subDoor}`);
+    function recordLock(subDoor) {
       const historyRef = db.ref(`history/${activeTerminal}`);
+      const userNameInput = document.getElementById('user-name').value.trim();
+      const personName = userNameInput !== "" ? userNameInput : "Anonymous";
 
-      currentDoorRef.once('value').then(snapshot => {
-        const currentStatus = snapshot.val()?.status;
-        const nextStatus = (currentStatus === "LOCKED") ? "UNLOCKED" : "LOCKED";
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const dateStr = new Date().toLocaleDateString();
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const dateStr = new Date().toLocaleDateString();
 
-        // 1. Update Latest State
-        currentDoorRef.set({ status: nextStatus, updatedAt: timeStr });
-
-        // 2. Append to Pass-Through Audit Log
-        historyRef.push({
-          door: subDoor,
-          status: nextStatus,
-          timestamp: timeStr,
-          date: dateStr
-        });
+      // Push new lock timestamp record
+      historyRef.push({
+        door: subDoor,
+        status: "LOCKED",
+        timestamp: timeStr,
+        date: dateStr,
+        user: personName
       }).catch(err => showError("Write Error: " + err.message));
     }
 
     function attachListeners() {
-      // Realtime Status Listener (Updates Button Colors)
-      db.ref(`status/${activeTerminal}`).on('value', snapshot => {
-        const data = snapshot.val() || {};
-        doorsData[activeTerminal].forEach(subDoor => {
-          const btn = document.getElementById(`btn-${activeTerminal}-${subDoor}`);
-          const doorInfo = data[subDoor] || { status: "UNLOCKED" };
-
-          if (btn) {
-            if (doorInfo.status === "LOCKED") {
-              btn.className = "p-3 rounded-xl bg-emerald-600 border border-emerald-500 text-white font-bold transition hover:opacity-90 active:scale-95 cursor-pointer flex flex-col items-center justify-center min-h-[64px] shadow-lg shadow-emerald-950/50";
-              btn.innerHTML = `<span class="text-xs text-emerald-200">Door ${subDoor}</span><span class="text-xs bg-emerald-800/80 px-1.5 py-0.5 rounded mt-0.5">LOCKED</span>`;
-            } else {
-              btn.className = "p-3 rounded-xl bg-slate-800 border border-slate-700/50 text-slate-300 font-bold transition hover:opacity-80 active:scale-95 cursor-pointer flex flex-col items-center justify-center min-h-[64px]";
-              btn.innerHTML = `<span class="text-xs text-slate-400">Door</span><span class="text-base">${subDoor}</span>`;
-            }
-          }
-        });
-      }, err => showError("Read Error: " + err.message));
-
-      // Realtime History Listener (Shows All Logs for the Day)
-      db.ref(`history/${activeTerminal}`).limitToLast(20).on('value', snapshot => {
+      // Realtime Lock History Listener
+      db.ref(`history/${activeTerminal}`).limitToLast(30).on('value', snapshot => {
         const historyLog = document.getElementById('history-log');
         historyLog.innerHTML = "";
         
         const logs = [];
         snapshot.forEach(child => {
-          logs.unshift(child.val()); // Newest entries on top
+          logs.unshift(child.val()); // Newest lock events on top
         });
 
         if (logs.length === 0) {
-          historyLog.innerHTML = `<div class="text-slate-500 italic">No door passes logged today.</div>`;
+          historyLog.innerHTML = `<div class="text-slate-500 italic">No door lock events recorded yet.</div>`;
           return;
         }
 
         logs.forEach(item => {
-          const isLocked = item.status === "LOCKED";
           historyLog.innerHTML += `
-            <div class="flex justify-between items-center py-1.5 px-3 bg-slate-800/40 rounded-lg border border-slate-800/80">
+            <div class="flex justify-between items-center py-2 px-3 bg-slate-800/40 rounded-lg border border-slate-800">
               <div class="flex items-center gap-2">
                 <span class="font-bold text-slate-200">Door ${item.door}</span>
-                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${isLocked ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}">
-                  ${item.status}
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                  LOCKED
                 </span>
+                <span class="text-slate-400 text-[11px]">by <b>${item.user || 'Anonymous'}</b></span>
               </div>
               <span class="text-slate-500">${item.timestamp}</span>
             </div>
           `;
         });
-      });
+      }, err => showError("Read Error: " + err.message));
     }
 
     function showError(msg) {
