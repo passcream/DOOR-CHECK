@@ -163,28 +163,67 @@ HTML
         });
     </script>
 </body>
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
+<!-- Firebase Compatibility SDKs (Easier for single-file HTML) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyBQ5_TI3e84CM0IKsOZIcqZM-MAv92jN6U",
-    authDomain: "door-check-78157.firebaseapp.com",
-    projectId: "door-check-78157",
-    storageBucket: "door-check-78157.firebasestorage.app",
-    messagingSenderId: "210863643705",
-    databaseURL: "https://door-check-78157-default-rtdb.asia-southeast1.firebasedatabase.app/",
-    appId: "1:210863643705:web:ce56f4c4ae9576ca00c1e8",
-    measurementId: "G-C08XS1REV8"
-  };
+  <script>
+    // Your exact Firebase configuration keys
+    const firebaseConfig = {
+      apiKey: "AIzaSyBQ5_TI3e84CM0IKsOZIcqZM-MAv92jN6U",
+      authDomain: "door-check-78157.firebaseapp.com",
+      projectId: "door-check-78157",
+      storageBucket: "door-check-78157.firebasestorage.app",
+      messagingSenderId: "210863643705",
+      databaseURL: "https://door-check-78157-default-rtdb.asia-southeast1.firebasedatabase.app/",
+      appId: "1:210863643705:web:ce56f4c4ae9576ca00c1e8",
+      measurementId: "G-C08XS1REV8"
+    };
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Function triggered when door buttons are clicked
+    function toggleDoor(doorName) {
+      const doorRef = db.ref('doors/' + doorName);
+      doorRef.once('value').then(snapshot => {
+        const current = snapshot.val()?.status;
+        const nextStatus = (current === "LOCKED") ? "UNLOCKED" : "LOCKED";
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        return doorRef.set({ status: nextStatus, updatedAt: time });
+      }).catch(err => alert("Database Error: " + err.message));
+    }
+
+    // Real-time Database Listener across all devices
+    db.ref('doors').on('value', snapshot => {
+      const data = snapshot.val() || {};
+      const logEl = document.getElementById('status-log');
+      if (logEl) logEl.innerHTML = "";
+
+      ["Terminal 2", "Terminal 3"].forEach(door => {
+        const info = data[door] || { status: "UNLOCKED", updatedAt: "Never checked" };
+        const btn = document.getElementById(`btn-${door}`);
+
+        if (btn) {
+          if (info.status === "LOCKED") {
+            btn.innerText = door + " (LOCKED)";
+            btn.style.backgroundColor = "#059669"; // Green
+          } else {
+            btn.innerText = door + " (UNLOCKED)";
+            btn.style.backgroundColor = "#334155"; // Dark Slate
+          }
+        }
+
+        if (logEl) {
+          logEl.innerHTML += `<div style="display:flex; justify-between; margin-bottom: 6px;">
+            <span><b>${door}:</b> ${info.status}</span>
+            <span style="color:#94a3b8; font-size:12px;">${info.updatedAt}</span>
+          </div>`;
+        }
+      });
+    });
+  </script>
+</body>
 </html>
