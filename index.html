@@ -158,7 +158,7 @@
 
       const historyRef = db.ref(`history/${activeTerminal}`);
       const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const isoDate = now.toISOString().split('T')[0];
 
       historyRef.push({
