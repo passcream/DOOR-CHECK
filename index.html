@@ -37,12 +37,23 @@
       <!-- Generated via JS -->
     </div>
 
-    <!-- Real-Time Activity Log -->
+    <!-- Real-Time Activity Log & Controls -->
     <div class="border-t border-slate-800 pt-4">
-      <div class="flex justify-between items-center mb-3">
-        <span class="text-sm font-semibold text-slate-300">📜 Lock Activity History</span>
-        <span id="active-term-label" class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Terminal 2</span>
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-slate-300">📜 Lock History</span>
+          <span id="active-term-label" class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Terminal 2</span>
+        </div>
+        
+        <!-- Date Selector & Export Button -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <input type="date" id="history-date" onchange="fetchHistoryForSelectedDate()" class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-emerald-500" />
+          <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer">
+            📥 CSV
+          </button>
+        </div>
       </div>
+
       <div id="history-log" class="space-y-1.5 max-h-64 overflow-y-auto text-xs pr-1">
         <div class="text-slate-500 italic">Loading activity history...</div>
       </div>
@@ -72,18 +83,21 @@
 
     const db = firebase.database();
 
-    // Door Configuration
     const doorsData = {
       T2: ["1A", "1B", "2", "3", "4A", "4B", "4C", "4D", "5", "6A", "6B", "7", "8"],
       T3: ["1", "2", "3", "4", "5"]
     };
 
     let activeTerminal = "T2";
+    let currentFetchedLogs = []; // Stores current view data for CSV export
+
+    // Set Date Input to Today by Default (YYYY-MM-DD)
+    const todayISO = new Date().toISOString().split('T')[0];
+    document.getElementById('history-date').value = todayISO;
 
     function switchTerminal(term) {
       activeTerminal = term;
       
-      // Update Tab Styles
       document.getElementById('tab-T2').className = term === 'T2' 
         ? "flex-1 py-2 rounded-lg font-bold text-sm transition bg-emerald-600 text-white shadow"
         : "flex-1 py-2 rounded-lg font-bold text-sm transition text-slate-400 hover:text-white";
@@ -95,7 +109,7 @@
       document.getElementById('active-term-label').innerText = term === 'T2' ? "Terminal 2" : "Terminal 3";
 
       renderGrid();
-      attachListeners();
+      fetchHistoryForSelectedDate();
     }
 
     function renderGrid() {
@@ -117,50 +131,82 @@
       const userNameInput = document.getElementById('user-name').value.trim();
       const personName = userNameInput !== "" ? userNameInput : "Anonymous";
 
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const dateStr = new Date().toLocaleDateString();
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const isoDate = now.toISOString().split('T')[0];
 
-      // Push new lock timestamp record
       historyRef.push({
         door: subDoor,
         status: "LOCKED",
         timestamp: timeStr,
-        date: dateStr,
+        date: isoDate,
         user: personName
       }).catch(err => showError("Write Error: " + err.message));
     }
 
-    function attachListeners() {
-      // Realtime Lock History Listener
-      db.ref(`history/${activeTerminal}`).limitToLast(30).on('value', snapshot => {
-        const historyLog = document.getElementById('history-log');
-        historyLog.innerHTML = "";
-        
-        const logs = [];
-        snapshot.forEach(child => {
-          logs.unshift(child.val()); // Newest lock events on top
-        });
+    function fetchHistoryForSelectedDate() {
+      const selectedDate = document.getElementById('history-date').value;
+      const historyLog = document.getElementById('history-log');
 
-        if (logs.length === 0) {
-          historyLog.innerHTML = `<div class="text-slate-500 italic">No door lock events recorded yet.</div>`;
-          return;
-        }
+      db.ref(`history/${activeTerminal}`)
+        .orderByChild('date')
+        .equalTo(selectedDate)
+        .on('value', snapshot => {
+          historyLog.innerHTML = "";
+          currentFetchedLogs = [];
 
-        logs.forEach(item => {
-          historyLog.innerHTML += `
-            <div class="flex justify-between items-center py-2 px-3 bg-slate-800/40 rounded-lg border border-slate-800">
-              <div class="flex items-center gap-2">
-                <span class="font-bold text-slate-200">Door ${item.door}</span>
-                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                  LOCKED
-                </span>
-                <span class="text-slate-400 text-[11px]">by <b>${item.user || 'Anonymous'}</b></span>
+          snapshot.forEach(child => {
+            currentFetchedLogs.unshift(child.val());
+          });
+
+          if (currentFetchedLogs.length === 0) {
+            historyLog.innerHTML = `<div class="text-slate-500 italic">No door lock records found for ${selectedDate}.</div>`;
+            return;
+          }
+
+          currentFetchedLogs.forEach(item => {
+            historyLog.innerHTML += `
+              <div class="flex justify-between items-center py-2 px-3 bg-slate-800/40 rounded-lg border border-slate-800">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-slate-200">Door ${item.door}</span>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                    LOCKED
+                  </span>
+                  <span class="text-slate-400 text-[11px]">by <b>${item.user || 'Anonymous'}</b></span>
+                </div>
+                <span class="text-slate-500">${item.timestamp}</span>
               </div>
-              <span class="text-slate-500">${item.timestamp}</span>
-            </div>
-          `;
-        });
-      }, err => showError("Read Error: " + err.message));
+            `;
+          });
+        }, err => showError("Read Error: " + err.message));
+    }
+
+    // Export history to CSV file
+    function exportToCSV() {
+      if (currentFetchedLogs.length === 0) {
+        alert("No records available to export for this date.");
+        return;
+      }
+
+      const selectedDate = document.getElementById('history-date').value;
+      const termName = activeTerminal === 'T2' ? "Terminal 2" : "Terminal 3";
+
+      // Build CSV headers and content
+      let csvContent = "data:text/csv;charset=utf-8,Terminal,Door,Status,Logged By,Date,Time\n";
+
+      currentFetchedLogs.forEach(row => {
+        const line = `"${termName}","Door ${row.door}","${row.status}","${row.user || 'Anonymous'}","${row.date}","${row.timestamp}"`;
+        csvContent += line + "\n";
+      });
+
+      // Create download trigger
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Door_Log_${activeTerminal}_${selectedDate}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     function showError(msg) {
@@ -171,7 +217,7 @@
 
     // Initialize View
     renderGrid();
-    attachListeners();
+    fetchHistoryForSelectedDate();
   </script>
 </body>
 </html>
